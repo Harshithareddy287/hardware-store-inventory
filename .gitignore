@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Local SQLite database
+inventory.db
+
 # C extensions
 *.so
 
