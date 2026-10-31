@@ -88,3 +88,33 @@ Revenue uses the price recorded at the time of each sale.
 | WIR001 | Electrical Wire |
 | OUT001 | Power Outlet |
 | SND001 | Sander |
+
+### Failed Sale Rollback Output
+
+**Before the failed sale:**
+
+| Product SKU | Quantity |
+|-------------|----------|
+| HAM001      | 10       |
+| DRL001      | 3        |
+
+**Sale Attempt:**
+
+The customer tries to purchase 2 hammers and 10 drills.
+
+**Result:** `Sale failed: Not enough stock`
+
+**After the failed sale:**
+
+| Product SKU | Quantity |
+|-------------|----------|
+| HAM001      | 10       |
+| DRL001      | 3        |
+
+**Database records after rollback:**
+
+| Table | Record Count |
+|-------|--------------|
+| sales | 0 |
+| sale_items | 0 |
+| stock_movements | 0 |
