@@ -144,3 +144,57 @@ def search_products(connection, text="", category=None, max_price=None,
     query += " ORDER BY products.name"
 
     return connection.execute(query, values).fetchall()
+
+# Calculate the total stock value for each supplier
+def stock_value_by_supplier(connection):
+    # Multiply price by quantity and group products by supplier
+    return connection.execute(
+        """
+        SELECT suppliers.name AS supplier_name,
+               COALESCE(SUM(products.unit_price * products.quantity), 0)
+               AS total_value
+        FROM suppliers
+        LEFT JOIN products ON suppliers.id = products.supplier_id
+        GROUP BY suppliers.id, suppliers.name
+        ORDER BY total_value DESC
+        """).fetchall()
+
+# Finding products that are at or below their reorder level
+def low_stock_report(connection):
+    # Calculating how many units each product needs
+    return connection.execute(
+        """
+        SELECT sku, name, quantity, reorder_level,
+               MAX(reorder_level - quantity, 0) AS units_short
+        FROM products
+        WHERE quantity <= reorder_level
+        ORDER BY name
+        """).fetchall()
+
+
+# Showing total units sold and revenue for each product
+def sales_by_product_report(connection):
+    # Calculating sales using the price charged at the time of sale
+    return connection.execute(
+        """
+        SELECT products.sku, products.name,
+               COALESCE(SUM(sale_items.quantity), 0) AS units_sold,
+               COALESCE(SUM(sale_items.quantity * sale_items.unit_price), 0)
+               AS revenue
+        FROM products
+        LEFT JOIN sale_items ON products.id = sale_items.product_id
+        GROUP BY products.id
+        ORDER BY revenue DESC
+        """).fetchall()
+
+# Finding products that have never been sold
+def never_sold_report(connection):
+    # Finding products have no matching sales records
+    return connection.execute(
+        """
+        SELECT products.sku, products.name, products.quantity
+        FROM products
+        LEFT JOIN sale_items ON products.id = sale_items.product_id
+        WHERE sale_items.product_id IS NULL
+        ORDER BY products.name
+        """).fetchall()
