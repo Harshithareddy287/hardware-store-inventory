@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from contextlib import closing
 
 from inventory_db import (
     add_product,
@@ -28,17 +29,53 @@ def show_menu():
     print("7. Backup database")
     print("0. Exit")
 
-# Search products by name, SKU, or supplier
-def search_menu(connection):
-    text = input("Enter product name, SKU, or supplier: ")
 
-    products = search_products(connection, text=text)
+# Search products with optional filters
+def search_menu(connection):
+    text = input("Enter product name, SKU, or supplier (optional): ").strip()
+    category = input("Enter category (optional): ").strip()
+
+    price_input = input("Enter maximum price in dollars (optional): ").strip()
+
+    if price_input:
+        max_price = round(float(price_input) * 100)
+
+        if max_price < 0:
+            raise ValueError("Maximum price cannot be negative.")
+    else:
+        max_price = None
+
+    in_stock_input = input("Show only in-stock products? (y/n): ").strip().lower()
+    low_stock_input = input("Show only low-stock products? (y/n): ").strip().lower()
+
+    if in_stock_input not in ("y", "n", ""):
+        raise ValueError("Enter y or n for in-stock filter.")
+
+    if low_stock_input not in ("y", "n", ""):
+        raise ValueError("Enter y or n for low-stock filter.")
+
+    products = search_products(
+        connection,
+        text=text,
+        category=category or None,
+        max_price=max_price,
+        in_stock=in_stock_input == "y",
+        low_stock=low_stock_input == "y",
+    )
 
     if not products:
-        print("No products found")
+        print("No products found.")
     else:
         for product in products:
-            print(product["sku"], "-", product["name"])
+            print(
+                product["sku"],
+                "-",
+                product["name"],
+                "-",
+                f"${product['unit_price'] / 100:.2f}",
+                "- Stock:",
+                product["quantity"],
+            )
 
 
 # Look up a product using its SKU
@@ -175,43 +212,43 @@ def show_low_stock_warning(connection):
                 f"reorder level {product['reorder_level']}"
             )   
 
-#Menu options
+            
+# Menu options
 def main():
-    connection = connect()
-    initialize_database(connection)
+    with closing(connect()) as connection:
+        initialize_database(connection)
 
-    show_low_stock_warning(connection)
+        show_low_stock_warning(connection)
 
-    while True:
-        show_menu()
-        choice = input("Enter your choice: ")
+        while True:
+            show_menu()
 
-        if choice == "0":
-            print("Goodbye!")
-            break
+            try:
+                choice = input("Enter your choice: ")
 
-        try:
-            if choice == "1":
-                search_menu(connection)
-            elif choice == "2":
-                lookup_menu(connection)
-            elif choice == "3":
-                add_product_menu(connection)
-            elif choice == "4":
-                restock_menu(connection)
-            elif choice == "5":
-                record_sale_menu(connection)
-            elif choice == "6":
-                reports_menu(connection)
-            elif choice == "7":
-                backup_menu(connection)
-            else:
-                print("Invalid option")
+                if choice == "0":
+                    print("Goodbye!")
+                    break
 
-        except (ValueError, TypeError) as error:
-            print("Error:", error)
+                if choice == "1":
+                    search_menu(connection)
+                elif choice == "2":
+                    lookup_menu(connection)
+                elif choice == "3":
+                    add_product_menu(connection)
+                elif choice == "4":
+                    restock_menu(connection)
+                elif choice == "5":
+                    record_sale_menu(connection)
+                elif choice == "6":
+                    reports_menu(connection)
+                elif choice == "7":
+                    backup_menu(connection)
+                else:
+                    print("Invalid option")
 
-    connection.close()
+            except (ValueError, TypeError, sqlite3.Error, OSError) as error:
+                print("Error:", error)
 
 
 if __name__ == "__main__":
