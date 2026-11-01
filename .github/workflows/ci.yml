@@ -29,7 +29,7 @@ jobs:
       - name: Run Ruff
         run: python -m ruff check .
 
-  docker:
+  docker-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,3 +38,6 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t hardware-inventory:ci .
+
+      - name: Run tests inside Docker
+        run: docker run --rm hardware-inventory:ci python -m pytest -q

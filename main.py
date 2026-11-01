@@ -161,10 +161,26 @@ def backup_menu(connection):
 
     print("Backup integrity check:", result)
 
+
+def show_low_stock_warning(connection):
+    products = low_stock_report(connection)
+
+    if products:
+        print(f"\n===== LOW STOCK WARNING: {len(products)} PRODUCTS =====")
+
+        for product in products:
+            print(
+                f"{product['name']} ({product['sku']}): "
+                f"{product['quantity']} remaining, "
+                f"reorder level {product['reorder_level']}"
+            )   
+
 #Menu options
 def main():
     connection = connect()
     initialize_database(connection)
+
+    show_low_stock_warning(connection)
 
     while True:
         show_menu()
