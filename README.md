@@ -1,39 +1,47 @@
 # Hardware Store Inventory Management System
 
-This is a Python project for managing inventory in a hardware store. I used SQLite to store product details, suppliers, sales, and stock changes.
+## About the Project
 
-The application helps keep track of available products, update stock, record sales, and generate inventory reports.
+This is a Python project I built to manage inventory for a hardware store.
+
+I used SQLite to store information about products, suppliers, sales, and stock changes.
+
+The application runs through a terminal menu. It allows users to manage products, update stock, record sales, and view reports.
 
 ## Features
 
-- Add, view, update, and delete products
+- Add products and look up their details
+- Update product prices and delete products using database functions
 - Search products using different filters
-- Restock products and record sales
-- Track stock movements
+- Restock products and adjust stock quantities
+- Record sales and update inventory
+- Keep a history of stock movements
 - View stock value by supplier
-- Find low-stock products
+- Find products that need restocking
 - View sales by product
 - Find products that have never been sold
-- Back up the database
+- Create database backups
 - Run the application using Docker
 
 ## Database
 
 I used SQLite with five tables:
 
-- `suppliers`
-- `products`
-- `sales`
-- `sale_items`
-- `stock_movements`
+1. `suppliers`
+2. `products`
+3. `sales`
+4. `sale_items`
+5. `stock_movements`
 
-Prices are stored as integer cents to avoid floating-point errors.
+Each product has a SKU, name, category, supplier, price, quantity in stock, and reorder level.
 
-I also used foreign keys, constraints, and STRICT tables to keep the data valid.
+I stored prices as integer cents to avoid floating-point errors.
+
+I also used foreign keys, constraints, and STRICT tables to help keep the data valid.
 
 ### Sample Data
 
-I created `seed_db.py` to add sample data.
+I created `seed_db.py` to add sample data to the database.
 
 I tested it using a separate database:
 
@@ -55,7 +63,7 @@ stock_movements: 0
 
 The sample data includes two low-stock products and three products that have never been sold.
 
-## Setup
+## How to Run the Project
 
 Install dependencies:
 
@@ -63,13 +71,13 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Create the database:
+Create and seed the database:
 
 ```bash
 python seed_db.py
 ```
 
-Run the application:
+Start the application:
 
 ```bash
 python main.py
@@ -87,7 +95,7 @@ Check the code:
 python -m ruff check .
 ```
 
-The application also supports the `INVENTORY_DB` environment variable to choose a database file.
+The application also supports the `INVENTORY_DB` environment variable.
 
 For example:
 
@@ -95,13 +103,32 @@ For example:
 INVENTORY_DB=inventory.db python main.py
 ```
 
-## Menu
+This allows me to choose which database file the application uses.
 
-The application uses a terminal menu to manage products, stock, sales, reports, and backups.
+## Application Menu
 
-In version 1.1.0, I added a low-stock warning that appears when the application starts.
+The application uses a terminal menu.
 
-Example:
+```text
+===== HARDWARE STORE INVENTORY =====
+
+1. Search products
+2. Look up product by SKU
+3. Add product
+4. Restock product
+5. Record sale
+6. View reports
+7. Backup database
+0. Exit
+```
+
+The menu allows users to manage inventory without writing SQL commands.
+
+### Low-Stock Warning
+
+In version 1.1.0, I added a warning that appears when the application starts if any product is at or below its reorder level.
+
+When I tested it locally using the sample database, I got this output:
 
 ```text
 ===== LOW STOCK WARNING: 2 PRODUCTS =====
@@ -109,11 +136,39 @@ Drill (DRL001): 3 remaining, reorder level 5
 Screws (SCS001): 5 remaining, reorder level 5
 ```
 
+### Low-Stock Warning Test in Docker
+
+I also tested the warning using Docker version 1.1.0.
+
+The Docker database was different from my local database, so it initially had no low-stock products.
+
+I added a product with these details:
+
+| Field | Value |
+|---|---|
+| SKU | LOW001 |
+| Product | Test Hammer |
+| Quantity | 2 |
+| Reorder Level | 5 |
+
+I exited the application, removed the container, and started version 1.1.0 again using the same Docker volume.
+
+Actual output:
+
+```text
+===== LOW STOCK WARNING: 1 PRODUCTS =====
+Test Hammer (LOW001): 2 remaining, reorder level 5
+```
+
+This confirmed that the warning works and that the product data remains saved after restarting the container.
+
 ## Reports
 
 I created four reports using the sample data.
 
 ### Stock Value by Supplier
+
+This report shows the total value of available stock for each supplier.
 
 | Supplier | Stock Value |
 |---|---:|
@@ -124,12 +179,18 @@ I created four reports using the sample data.
 
 ### Low-Stock Products
 
+This report shows products that are at or below their reorder level.
+
 | SKU | Product | Units Short |
 |---|---|---:|
 | DRL001 | Drill | 2 |
 | SCS001 | Screws | 0 |
 
+Screws appears in the report because its quantity is equal to its reorder level.
+
 ### Sales by Product
+
+This report shows how many units of each product were sold and the total revenue.
 
 | SKU | Units Sold | Revenue |
 |---|---:|---:|
@@ -146,9 +207,11 @@ I created four reports using the sample data.
 | WIR001 | 0 | $0.00 |
 | OUT001 | 0 | $0.00 |
 
-Revenue is calculated using the price recorded at the time of sale.
+Revenue is calculated using the price recorded when each sale was made.
 
 ### Never-Sold Products
+
+This report shows products that do not have any recorded sales.
 
 | SKU | Product |
 |---|---|
@@ -156,9 +219,17 @@ Revenue is calculated using the price recorded at the time of sale.
 | OUT001 | Power Outlet |
 | SND001 | Sander |
 
-## Failed Sale Rollback
+## Stock Changes and Sales
 
-I used database transactions to make sure a failed sale does not change the inventory.
+The application allows users to restock products and record sales.
+
+When a product is restocked, its quantity increases. When a sale is recorded, the quantity decreases.
+
+Stock changes are recorded in the `stock_movements` table so there is a history of inventory changes.
+
+### Failed Sale Rollback
+
+I used database transactions to make sure a failed sale does not partially change the inventory.
 
 I tested a sale with 2 hammers and 10 drills.
 
@@ -169,10 +240,18 @@ Before the sale:
 | HAM001 | 10 |
 | DRL001 | 3 |
 
-The sale failed because there were not enough drills.
+Function call used in my test:
+
+```python
+record_sale(db, [("HAM001", 2), ("DRL001", 10)])
+```
+
+The sale failed because there were only 3 drills available.
+
+Error:
 
 ```text
-Sale failed: Not enough stock
+ValueError: Not enough stock
 ```
 
 After the failed sale:
@@ -182,7 +261,7 @@ After the failed sale:
 | HAM001 | 10 |
 | DRL001 | 3 |
 
-I also checked the test database after the rollback:
+I checked that the hammer quantity was unchanged and that no records were saved in the sales tables.
 
 ```text
 sales: 0
@@ -190,27 +269,65 @@ sale_items: 0
 stock_movements: 0
 ```
 
-This confirmed that no changes were saved from the failed sale.
+This confirmed that the transaction was rolled back and no partial changes were saved.
+
+## Testing
+
+I used pytest to test the database operations and application features.
+
+I also used Ruff to check the code.
+
+### Local Test Results
+
+```text
+42 passed in 0.03s
+All checks passed!
+```
+
+I added a GitHub Actions workflow to run the tests and check the code when changes are pushed or a pull request is opened.
+
+The Docker build was also checked through GitHub Actions.
 
 ## Docker
 
 I used Docker to run the application in a container.
 
-Build the image:
+### Build the Image
 
 ```bash
 docker build -t hardware-inventory:ci .
 ```
 
-Run the application:
+### Docker Build Verification
+
+I built the Docker image and checked that it completed successfully.
+
+Actual output:
+
+```text
+[+] Building 0.6s (10/10) FINISHED
+=> CACHED [2/5] WORKDIR /app
+=> CACHED [3/5] COPY requirements.txt .
+=> CACHED [4/5] RUN pip install --no-cache-dir -r requirements.txt
+=> [5/5] COPY . .
+=> exporting to image
+=> naming to docker.io/library/hardware-inventory:ci
+=> unpacking to docker.io/library/hardware-inventory:ci
+```
+
+The image built successfully without errors.
+
+### Run the Application
 
 ```bash
 docker run -it --name hardware-inventory -v inventory-data:/data hardware-inventory:ci
 ```
 
-I used a named volume to keep the database outside the container.
+I used a named volume called `inventory-data` to store the SQLite database outside the container.
 
-### Docker Persistence
+This allows the data to remain available even when the container is removed.
+
+### Docker Persistence Test
 
 I tested Docker persistence by adding a product inside the container.
 
@@ -220,7 +337,11 @@ Name: Docker Hammer
 Quantity: 10
 ```
 
-After removing the container and starting a new one with the same volume, I searched for the product again.
+I exited the application, removed the container, and started another container using the same volume.
+
+I then searched for the product.
+
+Actual output:
 
 ```text
 SKU: DOC001
@@ -228,9 +349,11 @@ Name: Docker Hammer
 Quantity: 10
 ```
 
-The product was still available, which confirmed that the database was saved in the volume.
+The product was still available.
 
-### Docker Tests
+This confirmed that the database was stored in the Docker volume.
+
+### Docker Test Results
 
 I ran the tests inside Docker:
 
@@ -244,16 +367,13 @@ Actual output:
 42 passed in 0.04s
 ```
 
-I also ran the tests and Ruff locally:
-
-```text
-42 passed in 0.03s
-All checks passed!
-```
-
 ## Database Backup and Restore
 
-I added a backup option using SQLite's `backup()` function.
+I added a backup feature using SQLite's `backup()` function.
+
+This creates a copy of the database.
+
+### Backup Verification
 
 After creating the backup, I checked its integrity.
 
@@ -261,7 +381,7 @@ After creating the backup, I checked its integrity.
 Backup integrity: ok
 ```
 
-I also compared the original database with the backup.
+I also compared the number of records in the original database and the backup.
 
 ```text
 suppliers: Original=4, Backup=4
@@ -273,17 +393,17 @@ stock_movements: Original=2, Backup=2
 
 All the row counts matched.
 
-### Restore
+### Restore Verification
 
-To restore the database, first stop the application.
+To restore the database, I first stopped the application.
 
-Create a restored copy:
+I created a restored copy using:
 
 ```bash
 cp inventory_backup.db inventory_restored.db
 ```
 
-Check the restored database:
+I checked the restored database using:
 
 ```bash
 python -c "import sqlite3; c=sqlite3.connect('inventory_restored.db'); print(c.execute('PRAGMA integrity_check').fetchone()[0]); c.close()"
@@ -298,54 +418,72 @@ Database restored successfully!
 Integrity: ok
 ```
 
-To use the restored database:
+I could then run the application using the restored database:
 
 ```bash
 INVENTORY_DB=inventory_restored.db python main.py
 ```
 
+This confirmed that the backup could be used to restore the database.
+
 ## Releases
 
-### v1.0.0
+I created two versions of the project.
 
-This is the first release of the project. It includes product management, search, reports, stock updates, sales, database backup, and Docker support.
+### Version 1.0.0
 
-### v1.1.0
+This was the first release. It includes product management, search, reports, stock updates, sales, database backup, and Docker support.
 
-This version adds a low-stock warning when the application starts.
+### Version 1.1.0
 
-## Docker Rollback
+In this version, I added a low-stock warning that appears when the application starts.
 
-I used Docker image tags to manage different versions of the application.
+### Docker Rollback Verification
 
-To run version 1.1.0:
+I tested rolling back from version 1.1.0 to version 1.0.0.
 
-```bash
-docker run -it --name hardware-inventory -v inventory-data:/data hardware-inventory:1.1.0
-```
+First, I ran version 1.1.0 using the `inventory-data` Docker volume.
 
-After exiting the application, remove the container:
+I checked that the product `DOC001` was available.
 
-```bash
-docker rm hardware-inventory
-```
+Then I exited the application, removed the container, and started version 1.0.0 using the same volume.
 
-Run version 1.0.0 using the same volume:
+Command:
 
 ```bash
 docker run -it --name hardware-inventory -v inventory-data:/data hardware-inventory:1.0.0
 ```
 
-The goal is to confirm that the older version runs without the low-stock startup warning and that the inventory data is still available.
+I searched for the same product.
 
-**Rollback test is pending. Actual output will be added after verification.**
+Actual output:
+
+```text
+Enter your choice: 2
+Enter product SKU: DOC001
+SKU: DOC001
+Name: Docker Hammer
+Price: $15.00
+Quantity: 10
+Supplier: ABC Tools
+```
+
+The product was still available after switching back to version 1.0.0.
+
+Its quantity also remained the same.
+
+This confirmed that I could roll back to an older application version without losing the inventory data stored in the Docker volume.
 
 ## Self-Review
 
-While working on this project, I learned how to use Python with SQLite and how to organize database operations into separate functions. I also got more practice with SQL queries, joins, constraints, and transactions.
+While working on this project, I learned how to connect Python with SQLite and organize database operations into separate functions. I also got more practice writing SQL queries, using joins, and adding database constraints.
 
-One important thing I learned was how transactions work. When a sale fails because there is not enough stock, the database should not save any changes from that sale. Testing this helped me understand why transactions are useful.
+One important thing I learned was how transactions work. When a sale fails because there is not enough stock, the database should not save part of that sale. Testing this helped me understand why transactions are important.
 
-I also learned how Docker volumes work. I tested this by removing a container and starting a new one using the same volume. The inventory data was still available.
+I also learned how Docker volumes work. I tested this by removing a container and starting another one using the same volume. My product data was still available.
 
-If I worked on this project again, I would plan the database functions and tests earlier. This would help me organize the code better and avoid making too many changes later.
+Another thing I learned was how to create different releases and roll back to an older version. I tested both versions using the same Docker volume to make sure the inventory data was not lost.
+
+If I worked on this project again, I would spend more time reviewing edge cases, especially invalid inputs and failed database operations. This would help me identify possible problems earlier and make my tests more complete.
+
+One question I have for a reviewer is whether my transaction handling could be improved when a sale contains multiple products and one product does not have enough stock.
